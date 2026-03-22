@@ -9,6 +9,7 @@ from minio.error import S3Error
 from app.core.database import get_db
 from app.core.file_storage import minio_client, S3_BUCKET
 from app.core.models.eeg_file import EEGFile
+from app.core.models.analysis_job import AnalysisJob
 
 from typing import Optional, List
 from fastapi import Query
@@ -60,11 +61,21 @@ async def upload_eeg_file(
         )
 
         db.add(eeg_file)
+        db.flush()  # generates eeg_file.id without committing yet
+
+        analysis_job = AnalysisJob(
+            eeg_file_id=eeg_file.id,
+            status="queued",
+        )
+
+        db.add(analysis_job)
         db.commit()
+
         db.refresh(eeg_file)
+        db.refresh(analysis_job)
 
         return {
-            "message": "File uploaded successfully",
+            "message": "File uploaded successfully and analysis job created",
             "file": {
                 "id": eeg_file.id,
                 "uploaded_by_user_id": eeg_file.uploaded_by_user_id,
@@ -74,6 +85,16 @@ async def upload_eeg_file(
                 "file_size_bytes": eeg_file.file_size_bytes,
                 "object_storage_key": eeg_file.object_storage_key,
                 "created_at": eeg_file.created_at,
+            },
+            "analysis_job": {
+                "id": analysis_job.id,
+                "eeg_file_id": analysis_job.eeg_file_id,
+                "status": analysis_job.status,
+                "model_version": analysis_job.model_version,
+                "error_message": analysis_job.error_message,
+                "queued_at": analysis_job.queued_at,
+                "started_at": analysis_job.started_at,
+                "finished_at": analysis_job.finished_at,
             },
         }
 
@@ -87,8 +108,6 @@ async def upload_eeg_file(
 
     finally:
         await file.close()
-
-
 @router.get("/{file_id}")
 def get_eeg_file_metadata(file_id: int, db: Session = Depends(get_db)):
     eeg_file = db.query(EEGFile).filter(EEGFile.id == file_id).first()

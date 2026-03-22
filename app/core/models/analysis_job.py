@@ -1,5 +1,5 @@
 from sqlalchemy import String, ForeignKey, DateTime, func, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 
@@ -14,3 +14,10 @@ class AnalysisJob(Base):
     queued_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     started_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    analysis_result = relationship(
+        "AnalysisResult",
+        back_populates="analysis_job",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
