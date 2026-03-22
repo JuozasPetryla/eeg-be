@@ -2,7 +2,6 @@ from sqlalchemy import String, BigInteger, ForeignKey, DateTime, func, CheckCons
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
-
 class EEGFile(Base):
     __tablename__ = "eeg_files"
 

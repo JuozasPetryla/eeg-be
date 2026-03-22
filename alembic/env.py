@@ -3,7 +3,8 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 import os
 
-from app.db.base import Base
+from app.core.database import Base
+import app.db.base
 
 config = context.config
 

@@ -11,6 +11,8 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 class Base(DeclarativeBase):
     pass
 
+import app.core.models
+
 def get_db():
     db = SessionLocal()
     try:
