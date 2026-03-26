@@ -23,6 +23,7 @@ ALLOWED_EXTENSIONS = {"edf", "csv"}
 async def upload_eeg_file(
     uploaded_by_user_id: int = Form(...),
     patient_id: int | None = Form(None),
+    analysis_type: str = Form("day"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -35,6 +36,9 @@ async def upload_eeg_file(
             status_code=400,
             detail=f"Unsupported file type: {ext}. Allowed: {sorted(ALLOWED_EXTENSIONS)}",
         )
+
+    if analysis_type not in {"day", "night"}:
+        raise HTTPException(status_code=400, detail="analysis_type must be 'day' or 'night'")
 
     try:
         file.file.seek(0, os.SEEK_END)
@@ -65,6 +69,7 @@ async def upload_eeg_file(
 
         analysis_job = AnalysisJob(
             eeg_file_id=eeg_file.id,
+            analysis_type=analysis_type,
             status="queued",
         )
 
@@ -89,6 +94,7 @@ async def upload_eeg_file(
             "analysis_job": {
                 "id": analysis_job.id,
                 "eeg_file_id": analysis_job.eeg_file_id,
+                "analysis_type": analysis_job.analysis_type,
                 "status": analysis_job.status,
                 "model_version": analysis_job.model_version,
                 "error_message": analysis_job.error_message,
