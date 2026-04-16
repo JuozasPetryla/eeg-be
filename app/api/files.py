@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from minio.error import S3Error
 
 from app.core.database import get_db
-from app.core.file_storage import minio_client, S3_BUCKET
+from app.core.file_storage import ensure_bucket_exists, minio_client, S3_BUCKET
 from app.core.models.eeg_file import EEGFile
 from app.core.models.analysis_job import AnalysisJob
 
@@ -41,6 +41,8 @@ async def upload_eeg_file(
         raise HTTPException(status_code=400, detail="analysis_type must be 'day' or 'night'")
 
     try:
+        ensure_bucket_exists()
+
         file.file.seek(0, os.SEEK_END)
         file_size = file.file.tell()
         file.file.seek(0)
@@ -101,6 +103,7 @@ async def upload_eeg_file(
                 "queued_at": analysis_job.queued_at,
                 "started_at": analysis_job.started_at,
                 "finished_at": analysis_job.finished_at,
+                "result_url": f"/analysis-jobs/{analysis_job.id}/result",
             },
         }
 
