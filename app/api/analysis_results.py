@@ -17,16 +17,15 @@ def _build_result_json(job_id: int, result_json: dict) -> dict:
     if not isinstance(result_json, dict):
         return result_json
 
-    image_result = {}
-    is_image_map = True
+    processed_result = {}
 
     for key, value in result_json.items():
-        if not isinstance(value, str) or not value.endswith(".png"):
-            is_image_map = False
-            break
-        image_result[key] = f"http://localhost:8000/analysis-jobs/{job_id}/assets/{key}"
+        if isinstance(value, str) and value.endswith(".png"):
+            processed_result[key] = f"http://localhost:8000/analysis-jobs/{job_id}/assets/{key}"
+        else:
+            processed_result[key] = value
 
-    return image_result if is_image_map else result_json
+    return processed_result
 
 
 @router.get("/")
