@@ -8,6 +8,7 @@ class AnalysisJob(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     eeg_file_id: Mapped[int] = mapped_column(ForeignKey("eeg_files.id", ondelete="CASCADE"), nullable=False)
+    batch_id: Mapped[int | None] = mapped_column(ForeignKey("analysis_batches.id", ondelete="SET NULL"), nullable=True)
     analysis_type: Mapped[str] = mapped_column(String(20), nullable=False, server_default="day")
     status: Mapped[str] = mapped_column(String(30), nullable=False, server_default="queued")
     model_version: Mapped[str | None] = mapped_column(String(100), nullable=True)

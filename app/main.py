@@ -3,7 +3,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, users, files, analysis_results
+from app.api import account, analysis_batches, auth, users, files, analysis_results
 from app.core.file_storage import ensure_bucket_exists
 
 logger = logging.getLogger(__name__)
@@ -17,8 +17,10 @@ def startup():
         logger.warning("Skipping eager MinIO initialization during startup: %s", exc)
 
 app.include_router(auth.router)
+app.include_router(account.router)
 app.include_router(users.router)
 app.include_router(files.router)
+app.include_router(analysis_batches.router)
 app.include_router(analysis_results.router)
 
 app.add_middleware(
