@@ -13,6 +13,20 @@ pip install -U pip
 pip install -e .
 ```
 
+## Tests
+
+Local:
+
+- `make test`
+- `make integration-test`
+
+Docker isolated run from `eeg-infra/`:
+
+- `docker compose run --rm eeg-be-test`
+- `docker compose run --rm eeg-be-integration-test`
+
+Integration tests are destructive by design within their own environment: they recreate tables and clear the configured bucket between tests. Run them only against a dedicated test database and test bucket. The Docker integration runner in `eeg-infra` is configured that way already.
+
 ## Usage
 
 After successful setup, API should reachable on `http://localhost:8000`
