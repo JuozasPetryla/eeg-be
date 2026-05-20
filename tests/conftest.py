@@ -13,6 +13,7 @@ from app.core.models.analysis_job import AnalysisJob
 from app.core.models.eeg_file import EEGFile
 from app.core.models.patient import Patient
 from app.core.models.user import User
+from app.core.models.user_session import UserSession
 
 
 class FakeMinioClient:
@@ -73,6 +74,7 @@ def db_session() -> Generator[Session]:
         AnalysisBatch.__table__,
         EEGFile.__table__,
         AnalysisJob.__table__,
+        UserSession.__table__,
     ]
     for table in tables:
         table.create(bind=engine)
@@ -100,6 +102,8 @@ def client(db_session: Session, fake_minio: FakeMinioClient, monkeypatch: pytest
     def override_get_db() -> Generator[Session]:
         yield db_session
 
+    monkeypatch.setenv("DEV_AUTH_BYPASS", "true")
+    monkeypatch.setenv("DEV_AUTH_DEFAULT_EMAIL", "doctor@example.com")
     monkeypatch.setattr("app.main.ensure_bucket_exists", lambda: None)
     monkeypatch.setattr(files_api, "ensure_bucket_exists", lambda: None)
     monkeypatch.setattr(files_api, "minio_client", fake_minio)

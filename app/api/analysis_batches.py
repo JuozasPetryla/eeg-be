@@ -7,13 +7,26 @@ from app.core.models.analysis_batch import AnalysisBatch
 from app.core.models.analysis_job import AnalysisJob
 from app.core.models.analysis_result import AnalysisResult
 from app.core.models.eeg_file import EEGFile
+from app.core.models.user import User
+from app.core.security import get_current_user
 
 router = APIRouter(prefix="/analysis-batches", tags=["analysis-batches"])
 
 
 @router.get("/{batch_id}")
-def get_analysis_batch(batch_id: int, db: Session = Depends(get_db)):
-    batch = db.query(AnalysisBatch).filter(AnalysisBatch.id == batch_id).first()
+def get_analysis_batch(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    batch = (
+        db.query(AnalysisBatch)
+        .filter(
+            AnalysisBatch.id == batch_id,
+            AnalysisBatch.uploaded_by_user_id == current_user.id,
+        )
+        .first()
+    )
     if batch is None:
         raise HTTPException(status_code=404, detail="Analysis batch not found")
 
@@ -21,7 +34,10 @@ def get_analysis_batch(batch_id: int, db: Session = Depends(get_db)):
         db.query(AnalysisJob, EEGFile, AnalysisResult)
         .join(EEGFile, EEGFile.id == AnalysisJob.eeg_file_id)
         .outerjoin(AnalysisResult, AnalysisResult.analysis_job_id == AnalysisJob.id)
-        .filter(AnalysisJob.batch_id == batch_id)
+        .filter(
+            AnalysisJob.batch_id == batch_id,
+            EEGFile.uploaded_by_user_id == current_user.id,
+        )
         .order_by(AnalysisJob.queued_at.asc(), AnalysisJob.id.asc())
         .all()
     )

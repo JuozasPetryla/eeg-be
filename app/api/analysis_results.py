@@ -11,6 +11,8 @@ from app.core.models.analysis_batch import AnalysisBatch
 from app.core.models.analysis_job import AnalysisJob
 from app.core.models.analysis_result import AnalysisResult
 from app.core.models.eeg_file import EEGFile
+from app.core.models.user import User
+from app.core.security import get_current_user
 
 router = APIRouter(prefix="/analysis-jobs", tags=["analysis-results"])
 
@@ -78,21 +80,22 @@ def _serialize_single_job(job: AnalysisJob, eeg_file: EEGFile) -> dict:
 def list_analysis_jobs(
     analysis_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
-    uploaded_by_user_id: Optional[int] = Query(None),
     grouped: bool = Query(False),
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    query = db.query(AnalysisJob, EEGFile).join(EEGFile, EEGFile.id == AnalysisJob.eeg_file_id)
+    query = (
+        db.query(AnalysisJob, EEGFile)
+        .join(EEGFile, EEGFile.id == AnalysisJob.eeg_file_id)
+        .filter(EEGFile.uploaded_by_user_id == current_user.id)
+    )
 
     if analysis_type is not None:
         query = query.filter(AnalysisJob.analysis_type == analysis_type)
 
     if status is not None:
         query = query.filter(AnalysisJob.status == status)
-
-    if uploaded_by_user_id is not None:
-        query = query.filter(EEGFile.uploaded_by_user_id == uploaded_by_user_id)
 
     if not grouped:
         rows = (
@@ -115,8 +118,7 @@ def list_analysis_jobs(
     batch_query = db.query(AnalysisBatch)
     if analysis_type is not None:
         batch_query = batch_query.filter(AnalysisBatch.analysis_type == analysis_type)
-    if uploaded_by_user_id is not None:
-        batch_query = batch_query.filter(AnalysisBatch.uploaded_by_user_id == uploaded_by_user_id)
+    batch_query = batch_query.filter(AnalysisBatch.uploaded_by_user_id == current_user.id)
 
     batches = batch_query.order_by(AnalysisBatch.created_at.desc(), AnalysisBatch.id.desc()).limit(limit).all()
 
@@ -124,7 +126,9 @@ def list_analysis_jobs(
     for batch in batches:
         jobs = (
             db.query(AnalysisJob)
+            .join(EEGFile, EEGFile.id == AnalysisJob.eeg_file_id)
             .filter(AnalysisJob.batch_id == batch.id)
+            .filter(EEGFile.uploaded_by_user_id == current_user.id)
             .order_by(AnalysisJob.queued_at.asc(), AnalysisJob.id.asc())
             .all()
         )
@@ -148,8 +152,21 @@ def list_analysis_jobs(
 
 
 @router.get("/{job_id}/result")
-def get_analysis_result(job_id: int, db: Session = Depends(get_db)):
-    job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
+def get_analysis_result(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    row = (
+        db.query(AnalysisJob, EEGFile)
+        .join(EEGFile, EEGFile.id == AnalysisJob.eeg_file_id)
+        .filter(
+            AnalysisJob.id == job_id,
+            EEGFile.uploaded_by_user_id == current_user.id,
+        )
+        .first()
+    )
+    job = row[0] if row is not None else None
     if not job:
         raise HTTPException(status_code=404, detail="Analysis job not found")
 
@@ -200,7 +217,24 @@ def get_analysis_result(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{job_id}/assets/{asset_name}")
-def get_analysis_asset(job_id: int, asset_name: str, db: Session = Depends(get_db)):
+def get_analysis_asset(
+    job_id: int,
+    asset_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    owned_job = (
+        db.query(AnalysisJob.id)
+        .join(EEGFile, EEGFile.id == AnalysisJob.eeg_file_id)
+        .filter(
+            AnalysisJob.id == job_id,
+            EEGFile.uploaded_by_user_id == current_user.id,
+        )
+        .first()
+    )
+    if owned_job is None:
+        raise HTTPException(status_code=404, detail="Analysis job not found")
+
     result = (
         db.query(AnalysisResult)
         .filter(AnalysisResult.analysis_job_id == job_id)

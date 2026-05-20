@@ -13,6 +13,8 @@ from app.core.file_storage import S3_BUCKET, ensure_bucket_exists, minio_client
 from app.core.models.analysis_batch import AnalysisBatch
 from app.core.models.analysis_job import AnalysisJob
 from app.core.models.eeg_file import EEGFile
+from app.core.models.user import User
+from app.core.security import get_current_user
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -126,18 +128,18 @@ async def _store_file_and_job(
 
 @router.post("/upload")
 async def upload_eeg_file(
-    uploaded_by_user_id: int = Form(...),
     patient_id: int | None = Form(None),
     analysis_type: str = Form("day"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     _validate_analysis_type(analysis_type)
 
     try:
         ensure_bucket_exists()
         eeg_file, analysis_job = await _store_file_and_job(
-            uploaded_by_user_id=uploaded_by_user_id,
+            uploaded_by_user_id=current_user.id,
             patient_id=patient_id,
             analysis_type=analysis_type,
             file=file,
@@ -164,11 +166,11 @@ async def upload_eeg_file(
 
 @router.post("/upload-batch")
 async def upload_eeg_batch(
-    uploaded_by_user_id: int = Form(...),
     patient_id: int | None = Form(None),
     analysis_type: str = Form("day"),
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if len(files) < 2:
         raise HTTPException(status_code=400, detail="Batch upload requires at least 2 files")
@@ -179,7 +181,7 @@ async def upload_eeg_batch(
         ensure_bucket_exists()
 
         batch = AnalysisBatch(
-            uploaded_by_user_id=uploaded_by_user_id,
+            uploaded_by_user_id=current_user.id,
             analysis_type=analysis_type,
         )
         db.add(batch)
@@ -189,7 +191,7 @@ async def upload_eeg_batch(
         analysis_jobs: list[AnalysisJob] = []
         for upload_file in files:
             eeg_file, analysis_job = await _store_file_and_job(
-                uploaded_by_user_id=uploaded_by_user_id,
+                uploaded_by_user_id=current_user.id,
                 patient_id=patient_id,
                 analysis_type=analysis_type,
                 file=upload_file,
@@ -224,8 +226,19 @@ async def upload_eeg_batch(
 
 
 @router.get("/{file_id}")
-def get_eeg_file_metadata(file_id: int, db: Session = Depends(get_db)):
-    eeg_file = db.query(EEGFile).filter(EEGFile.id == file_id).first()
+def get_eeg_file_metadata(
+    file_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    eeg_file = (
+        db.query(EEGFile)
+        .filter(
+            EEGFile.id == file_id,
+            EEGFile.uploaded_by_user_id == current_user.id,
+        )
+        .first()
+    )
     if not eeg_file:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -233,8 +246,19 @@ def get_eeg_file_metadata(file_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{file_id}/download")
-def download_eeg_file(file_id: int, db: Session = Depends(get_db)):
-    eeg_file = db.query(EEGFile).filter(EEGFile.id == file_id).first()
+def download_eeg_file(
+    file_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    eeg_file = (
+        db.query(EEGFile)
+        .filter(
+            EEGFile.id == file_id,
+            EEGFile.uploaded_by_user_id == current_user.id,
+        )
+        .first()
+    )
     if not eeg_file:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -252,8 +276,19 @@ def download_eeg_file(file_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{file_id}")
-def delete_eeg_file(file_id: int, db: Session = Depends(get_db)):
-    eeg_file = db.query(EEGFile).filter(EEGFile.id == file_id).first()
+def delete_eeg_file(
+    file_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    eeg_file = (
+        db.query(EEGFile)
+        .filter(
+            EEGFile.id == file_id,
+            EEGFile.uploaded_by_user_id == current_user.id,
+        )
+        .first()
+    )
     if not eeg_file:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -273,18 +308,15 @@ def delete_eeg_file(file_id: int, db: Session = Depends(get_db)):
 @router.get("/")
 def list_eeg_files(
     patient_id: Optional[int] = Query(None),
-    uploaded_by_user_id: Optional[int] = Query(None),
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    query = db.query(EEGFile)
+    query = db.query(EEGFile).filter(EEGFile.uploaded_by_user_id == current_user.id)
 
     if patient_id is not None:
         query = query.filter(EEGFile.patient_id == patient_id)
-
-    if uploaded_by_user_id is not None:
-        query = query.filter(EEGFile.uploaded_by_user_id == uploaded_by_user_id)
 
     total = query.count()
     files = (
